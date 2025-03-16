@@ -49,7 +49,7 @@ class ContactResponse(BaseModel):
     class Config:
         from_attributes = True
 
-# 📌 Регистрация пользователя
+
 @router.post("/register/")
 def register(user: UserCreate, db: Session = Depends(get_db)):
     existing_user = db.query(User).filter(User.email == user.email).first()
@@ -72,7 +72,7 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
     access_token = create_access_token({"sub": str(new_user.id)})
     return {"access_token": access_token, "token_type": "bearer", "user_id": str(new_user.id)}
 
-# 📌 Логин пользователя и выдача JWT-токена
+
 @router.post("/login/")
 def login(user_data: LoginRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == user_data.email).first()
