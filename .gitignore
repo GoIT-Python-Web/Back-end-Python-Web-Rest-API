@@ -15,3 +15,23 @@ __pycache__/
 
 
 alembic/versions/*.pyc
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+migrations/versions/*.pyc
+migrations/versions/*.pyo
+migrations/versions/*.pyd
+migrations/versions/__pycache__/
+
+
+alembic.ini
+*.log
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+*.swp
+*.swo
+.DS_Store
