@@ -9,7 +9,7 @@ from typing import Optional, List
 
 router = APIRouter()
 
-# 📌 Pydantic-схемы
+
 class UserCreate(BaseModel):
     username: str
     email: str
