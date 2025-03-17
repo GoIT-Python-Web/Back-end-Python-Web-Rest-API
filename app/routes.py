@@ -69,8 +69,7 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(new_user)
 
-    access_token = create_access_token({"sub": str(new_user.id)})
-    return {"access_token": access_token, "token_type": "bearer", "user_id": str(new_user.id)}
+    return new_user
 
 
 @router.post("/login/")
