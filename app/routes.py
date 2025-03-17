@@ -57,6 +57,8 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="This User already exists. Go to Login page.")
     
     hashed_password = get_password_hash(user.password)
+
+    
     new_user = User(
         id=uuid4(),
         username=user.username,
@@ -65,11 +67,26 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
         first_name=user.first_name,
         last_name=user.last_name
     )
+
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
 
-    return new_user
+    
+    access_token = create_access_token({"user_id": str(new_user.id)})
+
+    
+    return {
+        "message": "User registered successfully.",
+        "user": {
+            "id": new_user.id,
+            "username": new_user.username,
+            "email": new_user.email,
+            "first_name": new_user.first_name,
+            "last_name": new_user.last_name
+        },
+        "access_token": access_token
+    }
 
 
 @router.post("/login/")
