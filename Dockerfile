@@ -9,4 +9,6 @@ COPY . .
 
 EXPOSE 8000
 
-CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+
+CMD ["sh", "-c", "echo \"[alembic]\nscript_location = alembic\nsqlalchemy.url = $DATABASE_URL\" > alembic.ini && alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+
