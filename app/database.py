@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://user:password@localhost/contacts_db")
+DATABASE_URL = os.getenv("DATABASE_URL").replace("postgresql://", "postgresql+psycopg2://")
 
 
 engine = create_engine(DATABASE_URL)
