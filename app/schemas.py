@@ -1,12 +1,55 @@
 from pydantic import BaseModel
 from uuid import UUID
+from typing import Optional, List
 
-class UserResponse(BaseModel):
-    id: str 
+class UserCreate(BaseModel):
     username: str
     email: str
-    first_name: str | None
-    last_name: str | None
+    password: str
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+
+class UserResponse(BaseModel):
+    id: UUID
+    username: str
+    email: str
+    first_name: Optional[str]
+    last_name: Optional[str]
 
     class Config:
         from_attributes = True
+
+class UserRegisterResponse(BaseModel):
+    message: str
+    user: UserResponse
+    access_token: str
+
+    class Config:
+        from_attributes = True
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
+class ContactCreate(BaseModel):
+    first_name: str
+    last_name: str
+    phone: str
+    birthdate: Optional[str] = None
+    description: Optional[str] = None
+
+class ContactResponse(BaseModel):
+    id: UUID
+    first_name: str
+    last_name: str
+    phone: str
+    birthdate: Optional[str]
+    description: Optional[str]
+
+    class Config:
+        from_attributes = True
+
