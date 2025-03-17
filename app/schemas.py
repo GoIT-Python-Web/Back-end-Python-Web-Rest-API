@@ -1,6 +1,7 @@
 from pydantic import BaseModel
 from uuid import UUID
 from typing import Optional, List
+from datetime import datetime
 
 class UserCreate(BaseModel):
     username: str
@@ -39,7 +40,7 @@ class ContactCreate(BaseModel):
     first_name: str
     last_name: str
     phone: str
-    birthdate: Optional[str] = None
+    birthdate: str
     description: Optional[str] = None
 
 class ContactResponse(BaseModel):
@@ -47,7 +48,7 @@ class ContactResponse(BaseModel):
     first_name: str
     last_name: str
     phone: str
-    birthdate: Optional[str]
+    birthdate: datetime
     description: Optional[str]
 
     class Config:
