@@ -16,7 +16,7 @@ router = APIRouter()
 
 @router.post("/register/", response_model=UserRegisterResponse, status_code=status.HTTP_201_CREATED, response_model_exclude_unset=True)
 def register(user: UserCreate, db: Session = Depends(get_db)):
-    existing_user = db.query(User).filter(User.email == user.email).first()
+    existing_user = db.query(User).filter(User.email == user.email or User.username == user.username ).first()
     if existing_user:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This User already exists. Go to Login page.")
 
@@ -35,12 +35,12 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(new_user)
 
-    access_token = create_access_token({"user_id": str(new_user.id)})
+    # access_token = create_access_token({"user_id": str(new_user.id)})
 
     return UserRegisterResponse(
         message="User registered successfully.",
         user=UserResponse.model_validate(new_user),
-        access_token=access_token
+        # access_token=access_token
     )
 
 

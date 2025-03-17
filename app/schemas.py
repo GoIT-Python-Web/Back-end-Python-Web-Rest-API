@@ -23,7 +23,7 @@ class UserResponse(BaseModel):
 class UserRegisterResponse(BaseModel):
     message: str
     user: UserResponse
-    access_token: str
+    # access_token: str
 
     class Config:
         from_attributes = True
