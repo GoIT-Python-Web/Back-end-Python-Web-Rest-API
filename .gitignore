@@ -25,7 +25,7 @@ migrations/versions/*.pyd
 migrations/versions/__pycache__/
 
 
-alembic.ini
+
 *.log
 __pycache__/
 *.pyc
