@@ -27,7 +27,7 @@ class Contact(Base):
     first_name: Mapped[str] = mapped_column(String, nullable=False)
     last_name: Mapped[str] = mapped_column(String, nullable=False)
     phone: Mapped[str] = mapped_column(String, nullable=False)
-    email: Mapped[str | None] = mapped_column(String, unique=True, nullable=True)
+    email: Mapped[str | None] = mapped_column(String,nullable=True)
     birthdate: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
