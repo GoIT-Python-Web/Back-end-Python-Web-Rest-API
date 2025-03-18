@@ -2,13 +2,15 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from uuid import uuid4, UUID
 from typing import List
+from datetime import datetime, timedelta
+from sqlalchemy.sql import func
 
 from app.database import get_db
 from app.models import User, Contact
 from app.auth import get_password_hash, verify_password, create_access_token, get_current_user
 from app.schemas import (
     UserCreate, UserResponse, UserRegisterResponse, LoginRequest, LoginResponse, 
-    ContactCreate, ContactResponse
+    ContactCreate, ContactResponse, ContactSearchResponse, UpcomingBirthdayResponse
 )
 
 router = APIRouter()
@@ -55,11 +57,6 @@ def login(user_data: LoginRequest, db: Session = Depends(get_db)):
     return LoginResponse(access_token=access_token)
 
 
-@router.get("/users/me/", response_model=UserResponse)
-def get_me(current_user: User = Depends(get_current_user)):
-    return UserResponse.model_validate(current_user)
-
-
 @router.post("/contacts/", response_model=ContactResponse, status_code=status.HTTP_201_CREATED, response_model_exclude_unset=True)
 def create_contact(
     contact: ContactCreate,
@@ -83,6 +80,11 @@ def create_contact(
     return ContactResponse.model_validate(new_contact)
 
 
+@router.get("/users/me/", response_model=UserResponse)
+def get_me(current_user: User = Depends(get_current_user)):
+    return UserResponse.model_validate(current_user)
+
+
 @router.get("/contacts/", response_model=List[ContactResponse])
 def get_contacts(
     db: Session = Depends(get_db),
@@ -90,6 +92,27 @@ def get_contacts(
 ):
     contacts = db.query(Contact).filter(Contact.user_id == current_user.id).all()
     return [ContactResponse.model_validate(contact) for contact in contacts]
+
+@router.get("/contacts/search", response_model=List[ContactSearchResponse])
+def search_contacts(query: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    contacts = db.query(Contact).filter(
+        (Contact.first_name.ilike(f"%{query}%")) |
+        (Contact.last_name.ilike(f"%{query}%")) |
+        (Contact.phone.ilike(f"%{query}%"))
+    ).all()
+    return [ContactSearchResponse.model_validate(contact) for contact in contacts]
+
+
+@router.get("/contacts/birthdays", response_model=List[UpcomingBirthdayResponse])
+def get_upcoming_birthdays(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    today = datetime.today().date()
+    next_week = today + timedelta(days=7)
+
+    contacts = db.query(Contact).filter(
+        func.date(Contact.birthdate) >= today,
+        func.date(Contact.birthdate) <= next_week
+    ).all()
+    return [UpcomingBirthdayResponse.model_validate(contact) for contact in contacts]
 
 
 @router.get("/contacts/{contact_id}", response_model=ContactResponse)

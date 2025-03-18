@@ -53,3 +53,21 @@ class ContactResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class ContactSearchResponse(BaseModel):
+    id: UUID
+    first_name: str
+    last_name: str
+    phone: str
+
+    class Config:
+        from_attributes = True
+
+class UpcomingBirthdayResponse(BaseModel):
+    id: UUID
+    first_name: str
+    last_name: str
+    birthdate: datetime
+
+    class Config:
+        from_attributes = True
