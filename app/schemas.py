@@ -39,6 +39,7 @@ class LoginResponse(BaseModel):
 class ContactCreate(BaseModel):
     first_name: str
     last_name: str
+    email: str
     phone: str
     birthdate: str
     description: Optional[str] = None
@@ -47,6 +48,7 @@ class ContactResponse(BaseModel):
     id: UUID
     first_name: str
     last_name: str
+    email: str
     phone: str
     birthdate: datetime
     description: Optional[str]
