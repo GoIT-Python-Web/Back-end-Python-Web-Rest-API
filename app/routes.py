@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import uuid4, UUID
 from typing import List
@@ -7,13 +7,34 @@ from sqlalchemy.sql import select, func
 
 from app.database import get_db
 from app.models import User, Contact
-from app.auth import get_password_hash, verify_password, create_access_token, get_current_user
-from app.schemas import (
-    UserCreate, UserResponse, UserRegisterResponse, LoginRequest, LoginResponse, 
-    ContactCreate, ContactResponse, ContactSearchResponse, UpcomingBirthdayResponse
+from app.auth import (
+    get_password_hash,
+    verify_password,
+    create_access_token,
+    get_current_user,
 )
+from app.schemas import (
+    UserCreate,
+    UserResponse,
+    UserRegisterResponse,
+    LoginRequest,
+    LoginResponse,
+    ContactCreate,
+    ContactResponse,
+    ContactSearchResponse,
+    UpcomingBirthdayResponse,
+    PhotoUploadResponse,
+)
+from app.rate_limit import (
+    check_rate_limit,
+    contact_creation_limiter,
+    contact_search_limiter,
+    contact_general_limiter,
+)
+from app.cloudinary_config import upload_photo
 
 router = APIRouter()
+
 
 def parse_date(date_str: str) -> datetime:
     formats = ["%Y-%m-%d", "%d.%m.%Y", "%m/%d/%Y"]
@@ -25,13 +46,25 @@ def parse_date(date_str: str) -> datetime:
     raise ValueError(f"Неверный формат даты: {date_str}")
 
 
-@router.post("/register/", response_model=UserRegisterResponse, status_code=status.HTTP_201_CREATED, response_model_exclude_unset=True)
+@router.post(
+    "/register/",
+    response_model=UserRegisterResponse,
+    status_code=status.HTTP_201_CREATED,
+    response_model_exclude_unset=True,
+)
 async def register(user: UserCreate, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(User).where((User.email == user.email) | (User.username == user.username)))
+    result = await db.execute(
+        select(User).where(
+            (User.email == user.email) | (User.username == user.username)
+        )
+    )
     existing_user = result.scalar_one_or_none()
 
     if existing_user:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="This User already exists. Go to Login page.")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This User already exists. Go to Login page.",
+        )
 
     hashed_password = get_password_hash(user.password)
 
@@ -41,7 +74,7 @@ async def register(user: UserCreate, db: AsyncSession = Depends(get_db)):
         email=user.email,
         password=hashed_password,
         first_name=user.first_name,
-        last_name=user.last_name
+        last_name=user.last_name,
     )
 
     db.add(new_user)
@@ -50,7 +83,7 @@ async def register(user: UserCreate, db: AsyncSession = Depends(get_db)):
 
     return UserRegisterResponse(
         message="User registered successfully.",
-        user=UserResponse.model_validate(new_user)
+        user=UserResponse.model_validate(new_user),
     )
 
 
@@ -60,18 +93,27 @@ async def login(user_data: LoginRequest, db: AsyncSession = Depends(get_db)):
     user = result.scalar_one_or_none()
 
     if not user or not verify_password(user_data.password, user.password):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password"
+        )
 
     access_token = create_access_token({"sub": str(user.id)})
     return LoginResponse(access_token=access_token)
 
 
-@router.post("/contacts/", response_model=ContactResponse, status_code=status.HTTP_201_CREATED, response_model_exclude_unset=True)
+@router.post(
+    "/contacts/",
+    response_model=ContactResponse,
+    status_code=status.HTTP_201_CREATED,
+    response_model_exclude_unset=True,
+)
 async def create_contact(
     contact: ContactCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
+    await check_rate_limit(contact_creation_limiter, str(current_user.id))
+
     new_contact = Contact(
         id=uuid4(),
         user_id=current_user.id,
@@ -80,7 +122,7 @@ async def create_contact(
         email=contact.email,
         phone=contact.phone,
         birthdate=parse_date(contact.birthdate),
-        description=contact.description
+        description=contact.description,
     )
 
     db.add(new_contact)
@@ -90,6 +132,35 @@ async def create_contact(
     return ContactResponse.model_validate(new_contact)
 
 
+@router.post("/upload-photo/", response_model=PhotoUploadResponse)
+async def upload_user_photo(
+    file: UploadFile = File(...), current_user: User = Depends(get_current_user)
+):
+    """
+    Upload a photo for the current user
+    """
+    if not file.content_type.startswith("image/"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="File must be an image"
+        )
+
+    try:
+        contents = await file.read()
+        photo_url, public_id = upload_photo(contents, folder=f"users/{current_user.id}")
+
+        return PhotoUploadResponse(
+            message="Photo uploaded successfully",
+            photo_url=photo_url,
+            public_id=public_id,
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
+        )
+    finally:
+        await file.close()
+
+
 @router.get("/users/me/", response_model=UserResponse)
 async def get_me(current_user: User = Depends(get_current_user)):
     return UserResponse.model_validate(current_user)
@@ -97,8 +168,7 @@ async def get_me(current_user: User = Depends(get_current_user)):
 
 @router.get("/contacts/", response_model=List[ContactResponse])
 async def get_contacts(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
     result = await db.execute(select(Contact).where(Contact.user_id == current_user.id))
     contacts = result.scalars().all()
@@ -106,12 +176,20 @@ async def get_contacts(
 
 
 @router.get("/contacts/search", response_model=List[ContactSearchResponse])
-async def search_contacts(query: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def search_contacts(
+    query: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    await check_rate_limit(contact_search_limiter, str(current_user.id))
+
     result = await db.execute(
         select(Contact).where(
-            (Contact.first_name.ilike(f"%{query}%")) |
-            (Contact.last_name.ilike(f"%{query}%")) |
-            (Contact.phone.ilike(f"%{query}%"))
+            Contact.user_id == current_user.id,
+            (Contact.first_name.ilike(f"%{query}%"))
+            | (Contact.last_name.ilike(f"%{query}%"))
+            | (Contact.phone.ilike(f"%{query}%"))
+            | (Contact.email.ilike(f"%{query}%")),
         )
     )
     contacts = result.scalars().all()
@@ -119,14 +197,19 @@ async def search_contacts(query: str, db: AsyncSession = Depends(get_db), curren
 
 
 @router.get("/contacts/birthdays", response_model=List[UpcomingBirthdayResponse])
-async def get_upcoming_birthdays(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_upcoming_birthdays(
+    db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)
+):
+    await check_rate_limit(contact_general_limiter, str(current_user.id))
+
     today = datetime.today().date()
     next_week = today + timedelta(days=7)
 
     result = await db.execute(
         select(Contact).where(
+            Contact.user_id == current_user.id,
             func.date(Contact.birthdate) >= today,
-            func.date(Contact.birthdate) <= next_week
+            func.date(Contact.birthdate) <= next_week,
         )
     )
     contacts = result.scalars().all()
@@ -137,34 +220,54 @@ async def get_upcoming_birthdays(db: AsyncSession = Depends(get_db), current_use
 async def get_contact(
     contact_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
-    result = await db.execute(select(Contact).where(Contact.id == contact_id, Contact.user_id == current_user.id))
+    await check_rate_limit(contact_general_limiter, str(current_user.id))
+
+    result = await db.execute(
+        select(Contact).where(
+            Contact.id == contact_id, Contact.user_id == current_user.id
+        )
+    )
     contact = result.scalar_one_or_none()
 
     if not contact:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contact not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Contact not found"
+        )
 
     return ContactResponse.model_validate(contact)
 
 
-@router.put("/contacts/{contact_id}", response_model=ContactResponse, response_model_exclude_unset=True)
+@router.put(
+    "/contacts/{contact_id}",
+    response_model=ContactResponse,
+    response_model_exclude_unset=True,
+)
 async def update_contact(
     contact_id: UUID,
     updated_contact: ContactCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
-    result = await db.execute(select(Contact).where(Contact.id == contact_id, Contact.user_id == current_user.id))
+    await check_rate_limit(contact_general_limiter, str(current_user.id))
+
+    result = await db.execute(
+        select(Contact).where(
+            Contact.id == contact_id, Contact.user_id == current_user.id
+        )
+    )
     contact = result.scalar_one_or_none()
 
     if not contact:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contact not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Contact not found"
+        )
 
     contact.first_name = updated_contact.first_name
     contact.last_name = updated_contact.last_name
     contact.phone = updated_contact.phone
-    contact.birthdate = updated_contact.birthdate
+    contact.birthdate = parse_date(updated_contact.birthdate)
     contact.description = updated_contact.description
 
     await db.commit()
@@ -177,13 +280,21 @@ async def update_contact(
 async def delete_contact(
     contact_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
-    result = await db.execute(select(Contact).where(Contact.id == contact_id, Contact.user_id == current_user.id))
+    await check_rate_limit(contact_general_limiter, str(current_user.id))
+
+    result = await db.execute(
+        select(Contact).where(
+            Contact.id == contact_id, Contact.user_id == current_user.id
+        )
+    )
     contact = result.scalar_one_or_none()
 
     if not contact:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contact not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Contact not found"
+        )
 
     await db.delete(contact)
     await db.commit()
