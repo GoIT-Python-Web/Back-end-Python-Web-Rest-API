@@ -59,6 +59,7 @@ class ContactResponse(BaseModel):
     phone: str
     birthdate: datetime
     description: Optional[str]
+    created_at: datetime
 
     class Config:
         from_attributes = True
@@ -71,6 +72,8 @@ class ContactSearchResponse(BaseModel):
     phone: str
     email: str
     birthdate: datetime
+    description: Optional[str]
+    created_at: datetime
 
     class Config:
         from_attributes = True

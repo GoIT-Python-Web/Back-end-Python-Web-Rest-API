@@ -136,9 +136,7 @@ async def create_contact(
 async def upload_user_photo(
     file: UploadFile = File(...), current_user: User = Depends(get_current_user)
 ):
-    """
-    Upload a photo for the current user
-    """
+
     if not file.content_type.startswith("image/"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="File must be an image"
